@@ -1,0 +1,20 @@
+.grade-details{
+	float: left;
+	background: #e6e6e6;
+	padding: 30px;
+	margin: 0 20px 10px 0;
+}
+
+	.grade-details .grade-note{
+		display: block;
+		font-size: 1.2em;
+		text-align: center;
+		color: rgb(160,160,160);
+	}
+
+	.grade-details .actual-grade{
+		font-size: 3em;
+		display: block;
+		margin-top: 10px;
+		text-align: center;
+	}

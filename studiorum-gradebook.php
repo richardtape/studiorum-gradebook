@@ -44,6 +44,9 @@
 	class Studiorum_Grade_Book
 	{
 
+		// The screens on which we wish the metabox to appear
+		static $screens = array();
+
 		/**
 		 * Actions and filters
 		 *
@@ -56,13 +59,65 @@
 		public function __construct()
 		{
 
+			// Load our necessary files
+			add_action( 'after_setup_theme', array( $this, 'after_setup_theme__includes' ), 1 );
+
+			// Set up the screens for the metabox
+			add_action( 'init', array( $this, 'init__setDefaultScreens' ) );
+
 			// Register the metabox call
 			add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes__registerMetaBox' ) );
 
 			// When a post is saved, save the grade too
 			add_action( 'save_post', array( $this, 'save_post__saveGradebookData' ) );
 
+			// Custom column for the gradebook if active
+			add_filter( 'manage_edit-lectio-submission_columns', array( $this, 'manage_edit_columns__addGradebookColumn' ) );
+			add_action( 'manage_lectio-submission_posts_custom_column' , array( $this, 'manage_posts_custom_column__addDateToGradebookColumn' ), 10, 2 );
+
+			// Add grade to single submission view on front-end
+			add_filter( 'the_content', array( $this, 'the_content__addGradeAboveSubmission' ) );
+
+			// Some extra styles for warning messages etc.
+			add_action( 'wp_enqueue_scripts', array( $this, 'wp_enqueue_scripts__frontEndStyles' ) );
+
 		}/* __construct() */
+
+
+		/**
+		 * Load our includes
+		 *
+		 * @since 0.1
+		 *
+		 * @param null
+		 * @return null
+		 */
+
+		public static function after_setup_theme__includes()
+		{
+
+			require_once( trailingslashit( STUDIORUM_GRADE_BOOK_DIR ) . 'includes/class-studiorum-gradebook-utils.php' );
+
+		}/* after_setup_theme__includes() */
+
+
+		/**
+		 * Add default screens for where to show the metabox
+		 *
+		 * @since 0.1
+		 *
+		 * @param null
+		 * @return null
+		 */
+
+		public function init__setDefaultScreens()
+		{
+
+			$screens = array( 'lectio-submission' );
+
+			static::$screens = apply_filters( 'studiorum_gradebook_metabox_screens', $screens );
+
+		}/* init__setDefaultScreens() */
 
 
 		/**
@@ -77,9 +132,7 @@
 		public function add_meta_boxes__registerMetaBox()
 		{
 
-			$screens = array( 'lectio-submission' );
-
-			$screens = apply_filters( 'studiorum_gradebook_metabox_screens', $screens );
+			$screens = static::$screens;
 
 			if( !$screens || !is_array( $screens ) || empty( $screens )  ){
 				return;
@@ -146,8 +199,7 @@
 			}
 
 			// Check we're on a relevant post type
-			$screens = array( 'lectio-submission' );
-			$screens = apply_filters( 'studiorum_gradebook_metabox_screens', $screens );
+			$screens = static::$screens;
 
 			if( !$screens || !is_array( $screens ) || empty( $screens )  ){
 				return;
@@ -170,6 +222,154 @@
 
 		}/* save_post__saveGradebookData() */
 
+
+		/**
+		 * Add the gradebook column should the gradebook add-on be activate
+		 *
+		 * @since 0.1
+		 *
+		 * @param array $columns - The predefined columns for the post type
+		 * @return array - modified columns with our custom column should we need to add it
+		 */
+
+		public function manage_edit_columns__addGradebookColumn( $columns )
+		{
+
+			// Is gradebook active?
+			if( class_exists( 'Studiorum_Lectio_Utils' ) && !Studiorum_Lectio_Utils::gradebookIsActive() ){
+				return $columns;
+			}
+
+			// It's active, so let's add the column
+			$columns['grade'] = __( 'Grade', 'studiorum-lectio' );
+
+			// ship
+			return $columns;
+
+		}/* manage_edit_columns__addGradebookColumn */
+
+
+		/**
+		 * Add data to the gradebook column should the gradebook add-on be active
+		 *
+		 *
+		 * @since 0.1
+		 *
+		 * @param array $column - columns being shown on the admin screen
+		 * @param int $post_id - the ID for each row of posts on the admin screen
+		 * @return null
+		 */
+
+		public function manage_posts_custom_column__addDateToGradebookColumn( $column, $post_id )
+		{
+
+			// Ensure we have the gradebook active
+			if( class_exists( 'Studiorum_Lectio_Utils' ) && !Studiorum_Lectio_Utils::gradebookIsActive() ){
+				return;
+			}
+
+			// Only add data to the grade column
+			if( $column != 'grade' ){
+				return;
+			}
+
+			// Get the data for this post
+			$value = get_post_meta( $post_id, 'studiorum_grade', true );
+
+			if( !$value || $value == '' )
+			{
+			
+				_e( 'Ungraded', 'studiorum-lectio' );
+				return;
+
+			}
+
+			echo esc_html( $value );
+
+		}/* manage_posts_custom_column__addDateToGradebookColumn */
+
+
+		/**
+		 * If a submission has been graded then we need to add a note with the grade above the submission
+		 * This should only be for the author of the submission and the admin
+		 *
+		 * @since 0.1
+		 *
+		 * @param string $content - the existing post content
+		 * @return string $content - modified post content
+		 */
+
+		public function the_content__addGradeAboveSubmission( $content )
+		{
+
+			// Not logged in, or we're on the back-end? No dice.
+			if( !is_user_logged_in() || is_admin() ){
+				return $content;
+			}
+
+			// First check we're on the right post type
+			$postID = get_the_ID();
+
+			// Screens (which doubles as post-types)
+			$screens = static::$screens;
+			
+			if( !isset( $screens ) || !is_array( $screens ) || empty( $screens ) ){
+				return $content;
+			}
+
+			if( !in_array( get_post_type( $postID ), array_values( $screens ) ) ){
+				return $content;
+			}
+
+			$currentUserID 		= get_current_user_id();
+			$userCanSeeGrade 	= Studiorum_Grade_Book_Utils::userCanSeeGrade( $currentUserID, $postID );
+
+			if( !$userCanSeeGrade ){
+				return $content;
+			}
+
+			// Fetch the grade
+			$grade = get_post_meta( $postID, 'studiorum_grade', true );
+
+			if( !$grade || $grade == '' ){
+				return $content;
+			}
+			
+			$hasGradeTemplate = apply_filters( 'studiorum_gradebook_has_grade_template_path', Studiorum_Utils::locateTemplateInPlugin( STUDIORUM_GRADE_BOOK_DIR, 'includes/templates/this-submission-is-graded.php' ) );
+			
+			if( !empty( $hasGradeTemplate ) ){
+				$prefix = Studiorum_Utils::fetchTemplatePart( $hasGradeTemplate, array( 'grade' => $grade ) );
+			}
+
+			return $prefix . $content;
+
+		}/* the_content__addGradeAboveSubmission() */
+
+
+		/**
+		 * Enqueue some front end styles
+		 *
+		 * @since 0.1
+		 *
+		 * @param null
+		 * @return null
+		 */
+
+		public function wp_enqueue_scripts__frontEndStyles()
+		{
+
+			// First check we're on a page with a valid gForm (set in options)
+			if( !class_exists( 'Studiorum_Lectio_Utils' ) ){
+				return false;
+			}
+
+			if( !is_singular( Studiorum_Lectio_Utils::$postTypeSlug ) ){
+				return false;
+			}
+
+			wp_enqueue_style( 'studiorum-grade-book-front-end-styles', trailingslashit( STUDIORUM_GRADE_BOOK_URL ) . 'includes/assets/css/studiorum-grade-book.css' );
+
+		}/* wp_enqueue_scripts__frontEndStyles() */
 
 	}/* class Studiorum_Grade_Book */
 
