@@ -217,8 +217,12 @@
 			// Sanitize user input.
 			$value = sanitize_text_field( $_POST['studiorum_grade'] );
 
+			do_action( 'studiorum_gradebook_before_save_grade', $value, $post_id );
+
 			// Update the meta field in the database.
 			update_post_meta( $post_id, 'studiorum_grade', $value );
+
+			do_action( 'studiorum_gradebook_after_save_grade', $value, $post_id );
 
 		}/* save_post__saveGradebookData() */
 
