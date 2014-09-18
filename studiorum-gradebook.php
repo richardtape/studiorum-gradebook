@@ -81,6 +81,9 @@
 			// Some extra styles for warning messages etc.
 			add_action( 'wp_enqueue_scripts', array( $this, 'wp_enqueue_scripts__frontEndStyles' ) );
 
+			// Register ourself as an addon
+			add_filter( 'studiorum_modules', array( $this, 'studiorum_modules__registerAsModule' ) );
+
 		}/* __construct() */
 
 
@@ -374,6 +377,41 @@
 			wp_enqueue_style( 'studiorum-grade-book-front-end-styles', trailingslashit( STUDIORUM_GRADE_BOOK_URL ) . 'includes/assets/css/studiorum-grade-book.css' );
 
 		}/* wp_enqueue_scripts__frontEndStyles() */
+
+
+		/**
+		 * Register ourself as a studiorum addon, so it's available in the main studiorum page
+		 *
+		 * @since 0.1
+		 *
+		 * @param array $modules Currently registered modules
+		 * @return array $modules modified list of modules
+		 */
+
+		public function studiorum_modules__registerAsModule( $modules )
+		{
+
+			if( !$modules || !is_array( $modules ) ){
+				$modules = array();
+			}
+
+			$modules['studiorum-gradebook'] = array(
+				'id' 				=> 'gradebook',
+				'plugin_slug'		=> 'studiorum-gradebook',
+				'title' 			=> __( 'Grade Book', 'studiorum' ),
+				'icon' 				=> 'yes', // dashicons-#
+				'excerpt' 			=> __( 'Give feedback to your students. View statistics across all users and allow students to see their own statistics.', 'studiorum' ),
+				'image' 			=> 'http://dummyimage.com/310/162',
+				'link' 				=> 'http://code.ubc.ca/studiorum/gradebook',
+				'content' 			=> __( '<p>Information here about what gradebook does</p>', 'studiorum' ),
+				'content_sidebar' 	=> 'http://dummyimage.com/300x150',
+				'date'				=> '2014-10-01',
+				'coming_soon'		=> true
+			);
+
+			return $modules;
+
+		}/* studiorum_modules__registerAsModule() */
 
 	}/* class Studiorum_Grade_Book */
 
